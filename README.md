@@ -1,3 +1,158 @@
+#selfmade #DIY 
+next day´s i make a android #APK that you can use 
+#headphones or #Bluetooth
+it works, too !
+
+Die nächsten Tag erstelle ich eine Android-APK, die ihr für Kopfhörer oder Bluetooth verwenden könnt.
+Das funktioniert auch!
+
+
+Option 1: "Direct" – Phone → Jack → Piezo (The "Headphone Cable")
+Since your Windows tool uses the LPT port (parallel data line), you'll need to switch to the headphone output (analog audio wave) on Android.
+This is the more natural way, because a piezo element also responds to sound.
+The circuit diagram (extremely simple)
+[Smartphone 3.5mm jack]
+Tip (Left) ----[100Ω resistor]----+
+|----> Piezo disc ----> Jack sleeve (GND)
+Ring (Right) --[100Ω resistor]----+
+(or use mono)
+Important:
+The series resistor (100-220 Ω) protects your phone's audio output from a short circuit (piezo elements have virtually no intrinsic resistance at high frequencies).
+The power output is low (approx. 10-20 mW), but sufficient for small glass plates (picture frame size).
+Modern mobile phones without a headphone jack require a USB-C to 3.5mm adapter.
+The Android app (concept):
+You would need an app that generates a pure sine or square wave (not MP3 music, but a mathematical function):
+Conclusion: This is the "poor man's solution." You don't have an on/off switch like with an LPT port, only a volume control. But it works for initial experiments.
+
+Option 2: "Professional" – Mobile Phone → Bluetooth → Microcontroller → Piezo
+
+If you want to unlock the full potential of your Windows tool (2-bit control, clock, precise frequencies), let the phone handle the calculations,
+but drive the piezo element with a small ESP32 or Arduino Nano (approx. €3).
+The Setup
+[Android App (APK)] --(Bluetooth/BLE)--> [ESP32] --(High-Current Drive)--> [Piezo on Glass]
+Advantage:
+The ESP32 provides 3.3V/5V with sufficient current (up to 40mA per pin, and even wattage with a transistor).
+You can run your ORIGINAL C++ algorithms (moon/sun clock) on the ESP32.
+The phone simply acts as a remote control with a sleek interface.
+Communication
+Bluetooth Classic (SPP): Sends simple text commands like "MOND:7.83:ON" or "TACT:4/4:120".
+BLE (Low Energy): More modern, app-friendly (Flutter/React Native).
+Option 3: "Air Coupling" (No cables to the glass)
+If you don't want to solder anything:
+Place a Bluetooth speaker on the table.
+Place a glass plate on top of (or next to) the speaker.
+The app plays a sweep tone (100Hz – 2kHz).
+The air vibration from the speaker drives the glass (works well with thinner glass).
+Disadvantage: The speaker's resonant frequency distorts the result. Direct piezo contact (option 1 or 2) is more precise.
+``` Option 3: "Air Coupling" (No wires to the glass)
+If you don't want to solder anything:
+Place a Bluetooth speaker on the table.
+Place a glass plate on top of the speaker (or next to it).
+An app plays a sweep tone (100 Hz – 2 kHz).
+The air vibration from the speaker drives the glass (works well with thinner panes).
+Disadvantage: The speaker's resonant frequency distorts the result. Direct piezo contact (option 1 or 2) is more precise.
+| Method | Effort | Power | Precision |
+| --------------------- | ------------------------------ | ---------------------------- | --------------------------- |
+**Direct Jack** | Very low (only soldering wires) | Very weak | Good for small glass panes |
+**Bluetooth + ESP32** | Medium (app + microcontroller) | High (wattage range possible) | Perfect (your C++ code) |
+**BT Box (Air)** | Zero (only install app) | Medium | Poor (inaccurate) |
+Recommendation: Get an ESP32-C3 Mini (costs €2, has Bluetooth onboard). Program it with the Arduino IDE (almost your Windows code will run 1:1).
+Then build an Android app with MIT App Inventor (visual, no code needed) that sends the frequency to the chip via Bluetooth.
+
+This way you get the "2-bit low-level" feel (the ESP is just a small chip), but the convenience of using your phone for input.
+
+Caution: If you connect your phone directly to the piezo element (without the ESP), start at a low volume (20%). Piezo elements are almost like short
+circuits for the phone's amplifier – too high a volume can permanently damage your smartphone's audio output stage!
+
+there still other apps which you can already use A signal generator app from the Play Store (e.g., "Frequency Generator" by JIOS or "FrequenSee"). These apps can already:
+
+[Android Phone] 
+       │
+       │ Bluetooth (Text-Kommandos: "MOND:7.83:ON")
+       ▼
+[ESP32 DevKit] (C++ Echtzeit)
+   ├── Pin 25 (Mond) ──► [Piezo/Verstärker] ──► Glas A (tief, langsam)
+   └── Pin 26 (Sonne) ──► [Piezo/Verstärker] ──► Glas B (hoch, schnell)
+
+###############################################
+#selfmade #diy #yourewelcome #4dglasses  #fypシ゚ #viralreelschallenge
+###############################################
+Eine Signalgenerator-App aus dem Play Store (z. B. „Frequency Generator“ von JIOS oder „FrequenSee“). Diese Apps können bereits:
+
+[Android Phone] 
+       │
+       │ Bluetooth (Text-Kommandos: "MOND:7.83:ON")
+       ▼
+[ESP32 DevKit] (C++ Echtzeit)
+   ├── Pin 25 (Mond) ──► [Piezo/Verstärker] ──► Glas A (tief, langsam)
+   └── Pin 26 (Sonne) ──► [Piezo/Verstärker] ──► Glas B (hoch, schnell)
+
+
+Variante 1: „Direkt“ – Handy → Klinke → Piezo (Das „Kopfhörer-Kabel“)
+Da dein Windows-Tool den LPT-Port (parallele Datenleitung) nutzt, musst du auf Android umsteigen auf den Kopfhörer-Ausgang (analoge Audiowelle).
+Das ist der „naturgerechte“ Weg, weil ein Piezo auch auf Töne reagiert.
+Der Schaltplan (extrem einfach)
+[Smartphone 3,5mm Klinke]
+    Tip (Links) ----[100Ω Widerstand]----+
+     |----> Piezo-Scheibe ----> Klinke-Sleeve (GND)
+    Ring (Rechts) --[100Ω Widerstand]----+
+    (oder Mono verwenden)
+
+Wichtig:
+Der Vorwiderstand (100-220 Ω) schützt den Audio-Ausgang deines Handys vor Kurzschluss (Piezos haben nahezu keinen Eigenwiderstand bei hohen Frequenzen).
+Die Leistung ist gering (ca. 10-20 mW), reicht aber für kleine Glasplatten (Bilderrahmen-Größe).
+Moderne Handys ohne Klinke brauchen einen USB-C zu 3,5mm Adapter.
+Die Android-App (Konzept)
+Du bräuchtest eine App, die einen reinen Sinus oder Rechteck erzeugt (keine MP3-Musik, sondern eine mathematische Funktion):
+
+Fazit: Das ist die „Arme-Leute-Lösung“. Du hast keinen „Aus/Aus“-Schalter wie beim LPT-Port, sondern nur Lautstärke-Regler. Aber es funktioniert für erste Experimente.
+
+Variante 2: „Professional“ – Handy → Bluetooth → Mikrocontroller → Piezo
+Wenn du das volle Potenzial deines Windows-Tools (2-Bit-Steuerung, Takt, präzise Frequenzen) willst, lässt du das Rechnen vom Handy erledigen,
+aber das Treiben des Piezos übernimmt ein kleiner ESP32 oder Arduino Nano (ca. 3€).
+Das Setup
+[Android App (APK)] --(Bluetooth/BLE)--> [ESP32] --(High-Current-Drive)--> [Piezo auf Glas]
+Vorteil:
+Der ESP32 liefert 3,3V/5V mit genug Strom (bis zu 40mA pro Pin, mit Transistor sogar Watt-Bereich).
+Du kannst deine ORIGINALEN C++-Algorithmen (Mond/Sonne-Takt) auf dem ESP32 laufen lassen.
+Das Handy ist nur die „Fernbedienung“ mit schickem Interface.
+Die Kommunikation
+Bluetooth Classic (SPP): Sendet einfache Text-Befehle wie "MOND:7.83:ON" oder "TAKT:4/4:120".
+BLE (Low Energy): Moderner, app-freundlicher (Flutter/React Native).
+Variante 3: „Air-Coupling“ (Ohne Kabel ans Glas)
+Wenn du gar nichts anlöten willst:
+Bluetooth-Box (Lautsprecher) auf den Tisch stellen
+Glasplatte auf die Box legen (oder daneben)
+App spielt Sweep-Ton (100Hz – 2kHz)
+Die Luftschwingung der Box treibt das Glas an (funktioniert gut bei dünneren Scheiben)
+Nachteil: Die Resonanzfrequenz der Box verfälscht das Ergebnis. Direkter Piezo-Kontakt (Variante 1 oder 2) ist präziser.
+
+Variante 3: „Air-Coupling“ (Ohne Kabel ans Glas)
+Wenn du gar nichts anlöten willst:
+Bluetooth-Box (Lautsprecher) auf den Tisch stellen
+Glasplatte auf die Box legen (oder daneben)
+App spielt Sweep-Ton (100Hz – 2kHz)
+Die Luftschwingung der Box treibt das Glas an (funktioniert gut bei dünneren Scheiben)
+Nachteil: Die Resonanzfrequenz der Box verfälscht das Ergebnis. Direkter Piezo-Kontakt (Variante 1 oder 2) ist präziser.
+
+| Methode               | Aufwand                        | Power                        | Präzision                   |
+| --------------------- | ------------------------------ | ---------------------------- | --------------------------- |
+| **Klinke direkt**     | Sehr gering (nur Kabel löten)  | Sehr schwach                 | Gut für kleine Glasscheiben |
+| **Bluetooth + ESP32** | Mittel (App + Mikrocontroller) | Stark (Watt-Bereich möglich) | Perfekt (dein C++ Code)     |
+| **BT-Box (Luft)**     | Null (nur App installieren)    | Mittel                       | Schlecht (ungenau)          |
+
+Empfehlung: nimm einen ESP32-C3 Mini (kostet 2€, hat Bluetooth onboard). Programmier ihn mit der Arduino-IDE (da läuft fast dein Windows-Code 1:1).
+Dann baust du dir eine Android-App mit MIT App Inventor (visuell, kein Code nötig), die per Bluetooth die Frequenz an den Chip sendet.
+So hast du das „2-Bit Low Level“-Feeling (der ESP ist ja nur ein kleiner Chip), aber die Bequemlichkeit des Handys zur Eingabe.
+Achtung: Wenn du das Handy direkt an den Piezo hängst (ohne ESP), starte mit niedriger Lautstärke (20%). Piezos sind fast Kurzschlüsse für den Verstärker
+des Handys – zu hohe Lautstärke kann die Audio-Ausgangsstufe deines Smartphones dauerhaft zerstören!
+
+
+
+
+
+
+
 Run as administrator (due to raw port access)!
 Hardware connection:
 Pin 2 (Bit 0) to piezo for moons/frequencies
