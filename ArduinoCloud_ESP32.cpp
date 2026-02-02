@@ -9,6 +9,10 @@ BluetoothSerial SerialBT;
 #define PIN_MOON 25
 #define PIN_SUN  26
 
+// WICHTIG für ESP32 V2.x: Wir müssen PWM-Kanäle (0-15) definieren
+#define CHAN_MOON 0
+#define CHAN_SUN  1
+
 float freqMoon = 7.83;
 float freqSun = 1000.0;
 bool moonOn = false;
@@ -26,12 +30,18 @@ void setup() {
   pinMode(PIN_MOON, OUTPUT);
   pinMode(PIN_SUN, OUTPUT);
   
-  // Hardware PWM Setup
-  ledcAttach(PIN_MOON, 5000, 16);
-  ledcAttach(PIN_SUN, 5000, 16);
+  // --- Hardware PWM Setup für ESP32 V2.x ---
+  // 1. Kanal konfigurieren (Kanal, Frequenz, Auflösung)
+  ledcSetup(CHAN_MOON, 5000, 16);
+  ledcSetup(CHAN_SUN, 5000, 16);
   
-  ledcWriteTone(PIN_MOON, 0);
-  ledcWriteTone(PIN_SUN, 0);
+  // 2. Pin an Kanal binden
+  ledcAttachPin(PIN_MOON, CHAN_MOON);
+  ledcAttachPin(PIN_SUN, CHAN_SUN);
+  
+  // Initial stumm schalten (Wichtig: Kanal nutzen, nicht Pin!)
+  ledcWriteTone(CHAN_MOON, 0);
+  ledcWriteTone(CHAN_SUN, 0);
   
   Serial.println("Schleier Controller bereit");
 }
@@ -49,11 +59,12 @@ void loop() {
     handleRhythm(); // Rhythmisches Pulsieren
   } else {
     // Freilauf: Dauerhafter Ton
-    if (moonOn) ledcWriteTone(PIN_MOON, freqMoon);
-    else ledcWriteTone(PIN_MOON, 0);
+    // WICHTIG: Hier CHAN_... statt PIN_... verwenden
+    if (moonOn) ledcWriteTone(CHAN_MOON, freqMoon);
+    else ledcWriteTone(CHAN_MOON, 0);
     
-    if (sunOn) ledcWriteTone(PIN_SUN, freqSun);
-    else ledcWriteTone(PIN_SUN, 0);
+    if (sunOn) ledcWriteTone(CHAN_SUN, freqSun);
+    else ledcWriteTone(CHAN_SUN, 0);
   }
   
   delay(1); // 1ms Stability
@@ -62,10 +73,11 @@ void loop() {
 void parseCommand(String c) {
   c.toUpperCase();
   
+  // WICHTIG: Auch hier CHAN_... statt PIN_... verwenden
   if (c == "MON") { moonOn = true; SerialBT.println("OK Mond AN"); }
-  else if (c == "MOFF") { moonOn = false; ledcWriteTone(PIN_MOON, 0); SerialBT.println("OK Mond AUS"); }
+  else if (c == "MOFF") { moonOn = false; ledcWriteTone(CHAN_MOON, 0); SerialBT.println("OK Mond AUS"); }
   else if (c == "SON") { sunOn = true; SerialBT.println("OK Sonne AN"); }
-  else if (c == "SOFF") { sunOn = false; ledcWriteTone(PIN_SUN, 0); SerialBT.println("OK Sonne AUS"); }
+  else if (c == "SOFF") { sunOn = false; ledcWriteTone(CHAN_SUN, 0); SerialBT.println("OK Sonne AUS"); }
   else if (c.startsWith("M:")) { 
     freqMoon = c.substring(2).toFloat(); 
     SerialBT.printf("OK Mond=%.2fHz\n", freqMoon);
@@ -116,22 +128,14 @@ void handleRhythm() {
         break;
         
       case 2: // 3/4: Walzer (X-xx-X-xx) - Betonung auf 1
-        playMoon = moonOn && (beatCounter == 0 || beatCounter == 1 || beatCounter == 2); // Alle 3, aber 1. lauter
+        playMoon = moonOn && (beatCounter == 0 || beatCounter == 1 || beatCounter == 2); 
         playSun = sunOn && (beatCounter == 0 || beatCounter == 1 || beatCounter == 2);
-        // 50% Duty Cycle im Takt
-        if (beatCounter == 1 || beatCounter == 2) {
-          // Leiser/Pause in den Nachschlägen (optional)
-        }
         break;
         
-      case 3: // 6/8: (X-x-x-X-x-x) - Zwei Hauptbeats
-        // Schläge 0 und 3 sind betont (die "großen" Beats)
+      case 3: // 6/8: (X-x-x-X-x-x)
         playMoon = moonOn && (beatCounter == 0 || beatCounter == 1 || beatCounter == 2 || 
                              beatCounter == 3 || beatCounter == 4 || beatCounter == 5);
-        playSun = sunOn && (beatCounter == 0 || beatCounter == 3); // Nur Hauptbeats für Sonne?
-        // Oder beides spielen - je nach Geschmack
-        playMoon = moonOn;
-        playSun = sunOn;
+        playSun = sunOn && (beatCounter == 0 || beatCounter == 3); 
         break;
         
       case 4: // 2/4: Marsch (X-X)
@@ -140,16 +144,16 @@ void handleRhythm() {
         break;
     }
     
-    // Ausführung: Immer kurze Pulse statt Dauerton im Takt
+    // Ausführung: WICHTIG -> CHAN_... verwenden
     if (playMoon) {
-      ledcWriteTone(PIN_MOON, freqMoon);
-      delay(50); // 50ms Puls (oder beatMs/2 für halbe Note)
-      ledcWriteTone(PIN_MOON, 0);
+      ledcWriteTone(CHAN_MOON, freqMoon);
+      delay(50); // Kurzer Impuls
+      ledcWriteTone(CHAN_MOON, 0);
     }
     if (playSun) {
-      ledcWriteTone(PIN_SUN, freqSun);
+      ledcWriteTone(CHAN_SUN, freqSun);
       delay(50);
-      ledcWriteTone(PIN_SUN, 0);
+      ledcWriteTone(CHAN_SUN, 0);
     }
   }
 }
