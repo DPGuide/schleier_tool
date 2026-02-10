@@ -2,14 +2,14 @@
 
 BluetoothSerial SerialBT;
 
-// --- HARDWARE KONFIGURATION ---
-#define PIN_MOON 25    // Ausgang für Mond-Frequenz
-#define PIN_SUN  26    // Ausgang für Sonnen-Frequenz
-#define PIN_LED   2    // Eingebaute LED für Status-Blinken
+// --- HARDWARE ---
+#define PIN_MOON 25
+#define PIN_SUN  26
+#define PIN_LED   2
 
 #define CHAN_MOON 0
 #define CHAN_SUN  1
-#define RESOLUTION 12  // 12-bit Auflösung für saubere Schwingungen
+#define RESOLUTION 12
 
 // --- VARIABLEN ---
 float freqMoon = 7.83;
@@ -17,126 +17,115 @@ float freqSun = 126.22;
 bool moonOn = false;
 bool sunOn = false;
 
-// TAKT & RHYTHMUS
 int bpm = 120;
-int taktTyp = 0;      // 0=Dauerton, 1=4/4, 2=3/4, 3=6/8, 4=2/4
+int taktTyp = 0; // 0 = Dauer, 1=4/4, 2=3/4, 3=6/8, 4=2/4
 int beatCounter = 0;
 int maxBeats = 4;
 unsigned long lastBeatTime = 0;
 
 void setup() {
   Serial.begin(115200);
-  SerialBT.begin("SCHLEIER_MASTER"); // Name für dein Tablet/Handy
-
+  SerialBT.begin("SCHLEIER_MASTER");
   pinMode(PIN_LED, OUTPUT);
 
-  // PWM Setup für den ESP32 (Klassik-Modus)
   ledcSetup(CHAN_MOON, 5000, RESOLUTION);
   ledcSetup(CHAN_SUN, 5000, RESOLUTION);
   ledcAttachPin(PIN_MOON, CHAN_MOON);
   ledcAttachPin(PIN_SUN, CHAN_SUN);
    
-  Serial.println(">>> SOLARIS MASTER BEREIT <<<");
-  Serial.println("Warte auf Bluetooth-Befehle...");
+  Serial.println(">>> DEBUG-MODUS AKTIV <<<");
+  Serial.println("Warte auf Befehle vom Tablet...");
 }
 
 void loop() {
-  // 1. BLUETOOTH BEFEHLE VERARBEITEN
+  // 1. BLUETOOTH ÜBERWACHUNG
   if (SerialBT.available()) {
-    String cmd = SerialBT.readStringUntil('\n');
-    cmd.trim();
+    String rawCmd = SerialBT.readStringUntil('\n');
+    rawCmd.trim();
+    String cmd = rawCmd;
     cmd.toUpperCase();
 
-    // Frequenzen einstellen & Auto-An
+    // DAS HIER ZEIGT DIR GENAU WAS ANKOMMT:
+    Serial.print("Empfangen: ["); Serial.print(rawCmd); Serial.println("]");
+
     if (cmd.startsWith("M:")) {
       freqMoon = cmd.substring(2).toFloat();
       moonOn = true;
-      Serial.printf("Mond: %.2f Hz\n", freqMoon);
     } 
     else if (cmd.startsWith("S:")) {
       freqSun = cmd.substring(2).toFloat();
       sunOn = true;
-      Serial.printf("Sonne: %.2f Hz\n", freqSun);
     }
-    // Manuelles Aus
     else if (cmd == "MOFF") moonOn = false;
     else if (cmd == "SOFF") sunOn = false;
     
-    // BPM & Takt-Typ
-    else if (cmd.startsWith("B:")) {
-      bpm = cmd.substring(2).toInt();
-      if (bpm < 1) bpm = 1;
-      Serial.printf("BPM eingestellt: %d\n", bpm);
+    // VERBESSERTE BPM-ERKENNUNG (sucht nach B oder BPM)
+    else if (cmd.indexOf("B") >= 0) {
+      // Sucht die Zahl im String, egal wo sie steht
+      String val = "";
+      for(int i=0; i<cmd.length(); i++) {
+        if(isDigit(cmd[i])) val += cmd[i];
+      }
+      if(val.length() > 0) {
+        bpm = val.toInt();
+        if(bpm < 1) bpm = 1;
+        Serial.printf("=> INTERNER TAKT GEÄNDERT AUF: %d BPM\n", bpm);
+      }
     }
-    else if (cmd.startsWith("T:")) {
-      taktTyp = cmd.substring(2).toInt();
-      // Mapping für deine APK
-      if (taktTyp == 1) maxBeats = 4;      // 4/4
-      else if (taktTyp == 2) maxBeats = 3; // 3/4
-      else if (taktTyp == 3) maxBeats = 6; // 6/8
-      else if (taktTyp == 4) maxBeats = 2; // 2/4
-      beatCounter = 0; 
-      Serial.printf("Takt-Modus: %d (%d Schläge)\n", taktTyp, maxBeats);
+    // VERBESSERTE TAKT-ERKENNUNG
+    else if (cmd.indexOf("T") >= 0) {
+      String val = "";
+      for(int i=0; i<cmd.length(); i++) {
+        if(isDigit(cmd[i])) val += cmd[i];
+      }
+      if(val.length() > 0) {
+        taktTyp = val.toInt();
+        if (taktTyp == 1) maxBeats = 4;
+        else if (taktTyp == 2) maxBeats = 3;
+        else if (taktTyp == 3) maxBeats = 6;
+        else if (taktTyp == 4) maxBeats = 2;
+        beatCounter = 0;
+        Serial.printf("=> TAKT-MODUS: %d (%d Schläge)\n", taktTyp, maxBeats);
+      }
     }
   }
 
-  // 2. TAKT-LOGIK & AKZENTE
+  // 2. TAKT-RECHNUNG
   bool pulsAn = true;
   float aktuelleSonne = freqSun;
 
   if (taktTyp > 0) {
-    unsigned long interval = 60000 / bpm;
+    // Hier passiert die Zeit-Magie:
+    unsigned long interval = 60000 / bpm; 
     unsigned long now = millis();
 
-    // Neuer Schlag?
     if (now - lastBeatTime >= interval) {
       lastBeatTime = now;
       beatCounter++;
       if (beatCounter > maxBeats) beatCounter = 1;
-      
-      // Kurze Info in die Konsole
-      Serial.print("Beat: "); Serial.println(beatCounter);
+      // Kleiner Punkt im Monitor für jeden Schlag
+      Serial.print("."); 
+      if(beatCounter == 1) Serial.println(" (1)"); 
     }
 
-    // 50% Puls-Dauer (Takt-Gefühl)
     pulsAn = (now - lastBeatTime < (interval / 2));
 
-    // AKZENTE SETZEN (Hörbare Betonung)
-    if (beatCounter == 1) {
-      aktuelleSonne = freqSun + 150.0; // Starke Betonung der EINS
-    } 
-    else if (taktTyp == 3 && beatCounter == 4) {
-      aktuelleSonne = freqSun + 70.0;  // 6/8 Schaukel-Betonung
-    }
-    else if (taktTyp == 1 && beatCounter == 3) {
-      aktuelleSonne = freqSun + 40.0;  // Leichte Betonung im 4/4
-    }
+    // Akzente
+    if (beatCounter == 1) aktuelleSonne = freqSun + 150.0;
+    else if (taktTyp == 3 && beatCounter == 4) aktuelleSonne = freqSun + 70.0;
     
-    // Status LED blinkt im Takt
     digitalWrite(PIN_LED, pulsAn ? HIGH : LOW);
-
   } else {
-    // Dauerton-Modus
-    pulsAn = true;
-    aktuelleSonne = freqSun;
+    pulsAn = true; // Dauerton
     digitalWrite(PIN_LED, HIGH);
   }
 
-  // 3. FINALE AUSGABE AN DIE PINS
-  
-  // Mond-Ausgabe
-  if (moonOn && pulsAn && freqMoon > 0) {
-    ledcWriteTone(CHAN_MOON, freqMoon);
-  } else {
-    ledcWriteTone(CHAN_MOON, 0);
-  }
+  // 3. SOUND-AUSGABE
+  if (moonOn && pulsAn && freqMoon > 0) ledcWriteTone(CHAN_MOON, freqMoon);
+  else ledcWriteTone(CHAN_MOON, 0);
 
-  // Sonnen-Ausgabe
-  if (sunOn && pulsAn && freqSun > 0) {
-    ledcWriteTone(CHAN_SUN, aktuelleSonne);
-  } else {
-    ledcWriteTone(CHAN_SUN, 0);
-  }
+  if (sunOn && pulsAn && freqSun > 0) ledcWriteTone(CHAN_SUN, aktuelleSonne);
+  else ledcWriteTone(CHAN_SUN, 0);
 
-  delay(10); // System-Stabilität
+  delay(5); // Schnelle Reaktionszeit
 }
