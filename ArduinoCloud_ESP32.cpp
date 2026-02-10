@@ -5,31 +5,39 @@ BluetoothSerial SerialBT;
 // --- HARDWARE ---
 #define PIN_MOON 25
 #define PIN_SUN  26
-#define PIN_LED   2    // Nur einmal definiert
+#define PIN_LED   2    
 #define PIN_STROBE 4
 
 #define CHAN_MOON 0
 #define CHAN_SUN  1
 #define CHAN_STROBE 2
-#define RESOLUTION 12
+#define RESOLUTION 8  // 8 Bit Auflösung
 
 // --- VARIABLEN ---
 float freqMoon = 7.83;
 float freqSun = 126.22;
 bool moonOn = false;
 bool sunOn = false;
+bool strobeActive = false; 
 
 int bpm = 120;
-int taktTyp = 0; // 0 = Dauer, 1=4/4, 2=3/4, 3=6/8, 4=2/4
+int taktTyp = 0; 
 int beatCounter = 0;
 int maxBeats = 4;
+int strobeTeiler = 50;
 unsigned long lastBeatTime = 0;
+
+// Speicher für die Memory-Funktion (damit nichts stottert)
+float lastMoonFreq = -1;
+float lastSunFreq = -1;
 
 void setup() {
   Serial.begin(115200);
   SerialBT.begin("SCHLEIER_MASTER");
-  pinMode(PIN_LED, OUTPUT);
+  SerialBT.setTimeout(0); // WICHTIG: Nicht warten!
 
+  pinMode(PIN_LED, OUTPUT);
+  
   ledcSetup(CHAN_MOON, 5000, RESOLUTION);
   ledcSetup(CHAN_SUN, 5000, RESOLUTION);
   ledcSetup(CHAN_STROBE, 5000, RESOLUTION);
@@ -37,135 +45,102 @@ void setup() {
   ledcAttachPin(PIN_MOON, CHAN_MOON);
   ledcAttachPin(PIN_SUN, CHAN_SUN);
   ledcAttachPin(PIN_STROBE, CHAN_STROBE);
-   
-  Serial.println(">>> DEBUG-MODUS AKTIV <<<");
-  Serial.println("Warte auf Befehle vom Tablet...");
 }
 
 void loop() {
-  // --- 1. BLUETOOTH ÜBERWACHUNG ---
+  // --- 1. DATEN EMPFANGEN ---
   if (SerialBT.available()) {
-    String rawCmd = SerialBT.readStringUntil('\n');
-    rawCmd.trim();
-    String cmd = rawCmd;
-    cmd.toUpperCase();
-
-    // Kurzes Debugging
-    // Serial.print("Cmd: "); Serial.println(cmd);
-
-    if (cmd.startsWith("M:")) {
-      freqMoon = cmd.substring(2).toFloat();
-      moonOn = true;
-    } 
-    else if (cmd.startsWith("S:")) {
-      freqSun = cmd.substring(2).toFloat();
-      sunOn = true;
-    }
-    else if (cmd == "MOFF") moonOn = false;
-    else if (cmd == "SOFF") sunOn = false;
-    
-    // BPM
-    else if (cmd.indexOf("B") >= 0) {
-      String val = "";
-      for(int i=0; i<cmd.length(); i++) {
-        if(isDigit(cmd[i])) val += cmd[i];
-      }
-      if(val.length() > 0) {
-        bpm = val.toInt();
-        if(bpm < 1) bpm = 1;
-      }
-    }
-    // TAKT
-    else if (cmd.indexOf("T") >= 0) {
-      String val = "";
-      for(int i=0; i<cmd.length(); i++) {
-        if(isDigit(cmd[i])) val += cmd[i];
-      }
-      if(val.length() > 0) {
-        taktTyp = val.toInt();
-        if (taktTyp == 1) maxBeats = 4;
-        else if (taktTyp == 2) maxBeats = 3;
-        else if (taktTyp == 3) maxBeats = 6;
-        else if (taktTyp == 4) maxBeats = 2;
+    String cmd = SerialBT.readStringUntil('\n');
+    cmd.trim();
+    if (cmd.length() > 0) {
+      if (cmd.startsWith("M:")) { freqMoon = cmd.substring(2).toFloat(); moonOn = true; } 
+      else if (cmd.startsWith("S:")) { freqSun = cmd.substring(2).toFloat(); sunOn = true; }
+      else if (cmd == "MOFF") moonOn = false;
+      else if (cmd == "SOFF") sunOn = false;
+      else if (cmd == "L:1") strobeActive = true;
+      else if (cmd == "L:0") strobeActive = false;
+      else if (cmd.startsWith("B:")) bpm = cmd.substring(2).toInt();
+      // Hier setzen wir die maxBeats für die verschiedenen Takte
+      else if (cmd.startsWith("T:")) { 
+        taktTyp = cmd.substring(2).toInt(); 
         beatCounter = 0;
+        if (taktTyp == 1) maxBeats = 4;      // 4/4 Takt
+        else if (taktTyp == 2) maxBeats = 3; // 3/4 Walzer
+        else if (taktTyp == 3) maxBeats = 6; // 6/8 Schaukeln
+        else if (taktTyp == 4) maxBeats = 2; // 2/4 Marsch
+      }
+      else if (cmd.startsWith("D:")) strobeTeiler = cmd.substring(2).toInt();
+    }
+  }
+
+  // --- 2. TAKT BERECHNUNG ---
+  unsigned long interval = 60000 / bpm; 
+  unsigned long now = millis();
+
+  if (now - lastBeatTime >= interval) {
+    lastBeatTime = now;
+    beatCounter++;
+    if (beatCounter > maxBeats) beatCounter = 1;
+  }
+
+  unsigned long zeitSeitSchlag = now - lastBeatTime;
+  
+  // Puls-Logik (50% an/aus)
+  bool soundPuls = (taktTyp == 0) ? true : (zeitSeitSchlag < (interval / 2));
+  bool lightPuls = (taktTyp > 0) && strobeActive && (zeitSeitSchlag < (interval / strobeTeiler));
+
+  // --- 3. SOUND BERECHNUNG (Hier kommen die Akzente zurück!) ---
+  
+  float targetMoon = 0;
+  float targetSun = 0;
+
+  // A) Mond Berechnung
+  if (moonOn && soundPuls) {
+    targetMoon = freqMoon;
+  } else {
+    targetMoon = 0;
+  }
+
+  // B) Sonne Berechnung (MIT AKZENTEN für den "Wumms")
+  if (sunOn && soundPuls) {
+    targetSun = freqSun;
+    
+    // Akzente setzen (Das macht den Unterschied zwischen den Takten!)
+    if (taktTyp > 0) {
+      if (beatCounter == 1) {
+        targetSun = freqSun + 150.0; // Die EINS ist viel höher/lauter
+      } 
+      else if (taktTyp == 3 && beatCounter == 4) {
+        targetSun = freqSun + 70.0;  // 6/8 Nebenbetonung
+      }
+      else if (taktTyp == 1 && beatCounter == 3) {
+        targetSun = freqSun + 40.0;  // 4/4 Nebenbetonung
       }
     }
+  } else {
+    targetSun = 0;
   }
 
-  // --- 2. DIE LOGIK-ZENTRALE (Kombiniert) ---
-  bool soundPuls = true;   // Für den Ton (lang)
-  bool lightPuls = true;   // Für die Brille (kurz)
-  float aktuelleSonne = freqSun;
+  // --- 4. HARDWARE UPDATE (Nur bei Änderung -> Kein Stottern!) ---
 
-  if (taktTyp > 0) {
-    // --- TAKT MODUS ---
-    unsigned long interval = 60000 / bpm; 
-    unsigned long now = millis();
+  if (targetMoon != lastMoonFreq) {
+    if (targetMoon > 0) ledcWriteTone(CHAN_MOON, targetMoon);
+    else ledcWriteTone(CHAN_MOON, 0);
+    lastMoonFreq = targetMoon;
+  }
 
-    // Zähler weiterschalten
-    if (now - lastBeatTime >= interval) {
-      lastBeatTime = now;
-      beatCounter++;
-      if (beatCounter > maxBeats) beatCounter = 1;
-    }
+  if (targetSun != lastSunFreq) {
+    if (targetSun > 0) ledcWriteTone(CHAN_SUN, targetSun);
+    else ledcWriteTone(CHAN_SUN, 0);
+    lastSunFreq = targetSun;
+  }
 
-    unsigned long zeitSeitSchlag = now - lastBeatTime;
-
-    // A) SOUND-LOGIK: Der Ton ist 50% der Zeit an (angenehmer Rhythmus)
-    soundPuls = (zeitSeitSchlag < (interval / 2));
-
-    // B) BRILLEN-LOGIK: Das Licht blitzt nur ganz kurz (1/50stel der Zeit)
-    // Das ist der "Reveal"-Effekt für Plexiglas/Rauch
-    lightPuls = (zeitSeitSchlag < (interval / 50)); 
-
-    // C) TON-AKZENTE (Die Melodie im Rhythmus)
-    if (beatCounter == 1) {
-      aktuelleSonne = freqSun + 150.0; // Die "Eins" ist hoch
-    } 
-    else if (taktTyp == 3 && beatCounter == 4) {
-      aktuelleSonne = freqSun + 70.0;  // 6/8 Akzent
-    }
-    else if (taktTyp == 1 && beatCounter == 3) {
-      aktuelleSonne = freqSun + 40.0;  // 4/4 Akzent
-    }
-
-    // D) STROBOSKOP AUSGABE
-    if (lightPuls) {
-      // Helligkeit: 20 ist dunkel/scharf, 255 ist hell/unscharf (bei 8-bit)
-      // Wir nehmen hier einen kräftigen Blitz für den Effekt
-      ledcWrite(CHAN_STROBE, 150); 
-      digitalWrite(PIN_LED, HIGH);
-    } else {
-      ledcWrite(CHAN_STROBE, 0);
-      digitalWrite(PIN_LED, LOW);
-    }
-
-  } else {
-    // --- DAUERTON MODUS ---
-    soundPuls = true;
-    lightPuls = true;
-    aktuelleSonne = freqSun;
-    
-    // Im Dauermodus kein Stroboskop (oder Dauer-An)
-    ledcWrite(CHAN_STROBE, 0); 
+  // --- 5. LICHT ---
+  if (lightPuls) {
+    ledcWrite(CHAN_STROBE, 150);
     digitalWrite(PIN_LED, HIGH);
-  }
-
-  // --- 3. SOUND-AUSGABE ---
-  
-  // Mond-Kanal
-  if (moonOn && soundPuls && freqMoon > 0) {
-    ledcWriteTone(CHAN_MOON, freqMoon);
   } else {
-    ledcWriteTone(CHAN_MOON, 0);
+    ledcWrite(CHAN_STROBE, 0);
+    digitalWrite(PIN_LED, LOW);
   }
-
-  // Sonnen-Kanal (mit Akzenten)
-  if (sunOn && soundPuls && freqSun > 0) {
-    ledcWriteTone(CHAN_SUN, aktuelleSonne);
-  } else {
-    ledcWriteTone(CHAN_SUN, 0);
-  }
-
-  delay(1); // Kurze Pause für Stabilität
 }
